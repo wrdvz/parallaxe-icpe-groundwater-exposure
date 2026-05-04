@@ -336,42 +336,23 @@ def construire_html(grille_geojson, points_icpe) -> str:
     </div>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/proj4@2.9.0/dist/proj4.js"></script>
-  <script src="https://unpkg.com/proj4leaflet@1.0.2/src/proj4leaflet.js"></script>
   <script>
     const grilleGeojson = {json.dumps(grille_geojson)};
     const pointsICPEParCategorie = {json.dumps(points_icpe_par_categorie)};
     const couleursFond = {json.dumps(COULEURS_FOND)};
 
-    const resolutions = [
-      104579.224549894, 52289.612274947, 26144.8061374735, 13072.40306873675,
-      6536.201534368375, 3268.1007671841877, 1634.0503835920938, 817.0251917960469,
-      408.51259589802344, 204.25629794901172, 102.12814897450586, 51.06407448725293,
-      25.532037243626465, 12.766018621813233, 6.3830093109066165, 3.1915046554533083,
-      1.5957523277266542, 0.7978761638633271, 0.39893808193166354, 0.19946904096583177,
-      0.09973452048291588, 0.04986726024145794
-    ];
-    const matrixIds = resolutions.map((_, i) => i.toString());
-    const crs = new L.Proj.CRS('EPSG:2154',
-      '+proj=lcc +lat_1=49 +lat_2=44 +lat_0=46.5 +lon_0=3 +x_0=700000 +y_0=6600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-      {{
-        resolutions: resolutions,
-        origin: [-357823.2365, 7230727.3772]
-      }}
-    );
-
     const map = L.map('map', {{
-      crs: crs,
       center: [46.6, 2.2],
-      zoom: 6,
-      minZoom: 0,
+      zoom: 5.7,
+      minZoom: 4,
       zoomSnap: 0.5
     }});
 
-    L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2.L93&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=LAMB93&TILEMATRIX={{z}}&TILEROW={{y}}&TILECOL={{x}}', {{
+    L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png', {{
+      subdomains: 'abcd',
       tileSize: 256,
-      attribution: 'Fond cartographique IGN',
-      maxZoom: 18
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      maxZoom: 20
     }}).addTo(map);
 
     function styleGrille(feature) {{

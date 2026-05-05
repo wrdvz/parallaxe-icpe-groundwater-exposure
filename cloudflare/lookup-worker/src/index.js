@@ -105,7 +105,7 @@ export default {
       if (!record) {
         return { siret, found: false };
       }
-      return { found: true, ...pickResult(record) };
+      return { siret, found: true, ...pickResult(record) };
     });
 
     const matched = results.filter((row) => row.found).length;

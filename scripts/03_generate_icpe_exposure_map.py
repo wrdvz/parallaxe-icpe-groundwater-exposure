@@ -395,7 +395,7 @@ def construire_html(grille_geojson, points_icpe) -> str:
     <div class="divider"></div>
     <div class="section-title">Portefeuille</div>
     <div class="portfolio-box">
-      <p>Charge un fichier portefeuille simple par SIRET. La carte fait un rapprochement exact avec les sites ICPE géolocalisés et affiche les actifs retrouvés.</p>
+      <p>Charge un fichier portefeuille simple avec une seule colonne obligatoire : <strong>siret</strong>. La carte fait un rapprochement exact avec les sites ICPE géolocalisés et déduit le reste quand il y a match.</p>
       <div class="portfolio-actions">
         <a class="button-link" href="./portfolio_template.xlsx" download>Télécharger le modèle XLSX</a>
         <label class="file-label" for="portfolio-upload">Charger un portefeuille</label>

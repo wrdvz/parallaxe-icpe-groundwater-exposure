@@ -440,12 +440,13 @@ def construire_html(grille_geojson, points_icpe) -> str:
     const renderer = L.canvas({{ padding: 0.5 }});
 
     function pointRadiusForZoom(zoom) {{
-      if (zoom >= 11) return 6.8;
-      if (zoom >= 10) return 5.8;
-      if (zoom >= 9) return 5.0;
-      if (zoom >= 8) return 4.4;
-      if (zoom >= 7) return 3.6;
-      return 2.8;
+      if (zoom >= 11) return 6.2;
+      if (zoom >= 10) return 5.0;
+      if (zoom >= 9) return 4.0;
+      if (zoom >= 8) return 3.2;
+      if (zoom >= 7) return 2.4;
+      if (zoom >= 6) return 1.7;
+      return 1.1;
     }}
 
     function currentPointRadius() {{

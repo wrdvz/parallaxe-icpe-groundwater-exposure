@@ -672,12 +672,50 @@ def construire_html(grille_geojson, points_icpe) -> str:
         const siret = String(row.siret || '').replace(/\\D+/g, '');
         if (!siret) return;
         const result = lookupBySiret.get(siret);
+        const localMatches = icpeBySiret.get(siret) || [];
+
+        if (localMatches.length) {{
+          icpeCount += localMatches.length;
+          displayed += localMatches.length;
+          localMatches.forEach((match) => {{
+            const marker = L.circleMarker([match.lat, match.lon], {{
+              pane: 'pane-portfolio',
+              renderer: portfolioRenderer,
+              radius: portfolioRadiusForZoom(map.getZoom()),
+              stroke: true,
+              weight: 1.6,
+              color: '#0f172a',
+              fillColor: '#facc15',
+              fillOpacity: 0.92
+            }});
+            const hoverHtml = buildPortfolioHover(
+              {{
+                site_icpe: true,
+                denomination: match.nom_ets || null,
+                icpe_category: match.categorie || null,
+                grid_class: match.grid_class || null,
+                geo_type: result?.geo_type || null,
+                geo_score: result?.geo_score || null,
+              }},
+              row,
+              match
+            );
+            marker.on('mouseover', function() {{
+              setHoverBox(hoverHtml);
+            }});
+            marker.on('mouseout', function() {{
+              resetHoverBox();
+            }});
+            portfolioLayer.addLayer(marker);
+          }});
+          return;
+        }}
+
         if (!result || !result.found || !Number.isFinite(result.latitude) || !Number.isFinite(result.longitude)) {{
           unmatchedCount += 1;
           return;
         }}
 
-        const localIcpeMatch = (icpeBySiret.get(siret) || [])[0] || null;
         if (result.site_icpe) icpeCount += 1;
         displayed += 1;
 
@@ -691,7 +729,7 @@ def construire_html(grille_geojson, points_icpe) -> str:
           fillColor: result.site_icpe ? '#facc15' : '#fde68a',
           fillOpacity: 0.92
         }});
-        const hoverHtml = buildPortfolioHover(result, row, localIcpeMatch);
+        const hoverHtml = buildPortfolioHover(result, row, null);
         marker.on('mouseover', function() {{
           setHoverBox(hoverHtml);
         }});

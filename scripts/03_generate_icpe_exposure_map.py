@@ -564,7 +564,7 @@ def construire_html(grille_geojson, points_icpe) -> str:
 
     map.on('zoomend', updatePointRadii);
 
-    const portfolioLayer = L.layerGroup().addTo(map);
+    const portfolioLayer = L.featureGroup().addTo(map);
     const allICPEPoints = Object.values(pointsICPEParCategorie).flat();
     const icpeBySiret = new Map();
     allICPEPoints.forEach((row) => {{

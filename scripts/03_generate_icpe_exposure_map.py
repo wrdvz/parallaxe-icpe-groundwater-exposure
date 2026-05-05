@@ -602,12 +602,13 @@ def construire_html(grille_geojson, points_icpe) -> str:
     }}
 
     function buildPortfolioHover(row, portfolioRow) {{
-      const portfolioName = portfolioRow.company_name || portfolioRow.nom_societe || portfolioRow.portfolio_name || 'Ligne portefeuille';
+      const portfolioName = portfolioRow.company_name || portfolioRow.nom_societe || portfolioRow.portfolio_name || '';
       const siteName = row.nom_ets || 'Site sans nom';
       return `
         <strong>${{escapeHtml(siteName)}}</strong><br>
-        Portefeuille : ${{escapeHtml(portfolioName)}}<br>
+        ${{portfolioName ? `Portefeuille : ${{escapeHtml(portfolioName)}}<br>` : ''}}
         SIRET : ${{escapeHtml(portfolioRow.siret)}}<br>
+        Site ICPE : oui<br>
         Catégorie eau : ${{escapeHtml(row.categorie || 'n.d.')}}<br>
         Commune : ${{escapeHtml(row.commune || 'n.d.')}}<br>
         Classe de grille : ${{escapeHtml(row.grid_class || 'n.d.')}}

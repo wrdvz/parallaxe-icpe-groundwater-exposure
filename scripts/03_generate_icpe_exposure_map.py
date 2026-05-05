@@ -357,14 +357,21 @@ def construire_html(grille_geojson, points_icpe) -> str:
     .hover-box {{ font-size: 13px; line-height: 1.45; color: #334155; min-height: 120px; }}
     .portfolio-box {{ display: grid; gap: 8px; }}
     .portfolio-actions {{ display: flex; gap: 8px; flex-wrap: wrap; }}
+    .portfolio-textarea {{
+      width: 100%; min-height: 120px; resize: vertical; box-sizing: border-box;
+      border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 12px;
+      font: inherit; font-size: 13px; line-height: 1.45; color: #0f172a; background: #fff;
+    }}
+    .portfolio-textarea::placeholder {{ color: #94a3b8; }}
     .button-link, .file-label {{
       display: inline-flex; align-items: center; justify-content: center;
       min-height: 34px; padding: 0 12px; border-radius: 6px; text-decoration: none;
       border: 1px solid #cbd5e1; background: #f8fafc; color: #0f172a; font-size: 12px; font-weight: 600;
       cursor: pointer;
     }}
+    .button-link.primary {{ background: #0f172a; color: #fff; border-color: #0f172a; }}
+    .button-link.primary:hover {{ background: #1e293b; }}
     .button-link:hover, .file-label:hover {{ background: #eef2f7; }}
-    .file-input {{ display: none; }}
     .portfolio-status {{ font-size: 12px; line-height: 1.45; color: #475569; }}
     .sources {{ margin-top: 24px; font-size: 12px; line-height: 1.55; color: #334155; }}
     .sources strong {{ display: block; margin-top: 8px; }}
@@ -395,13 +402,13 @@ def construire_html(grille_geojson, points_icpe) -> str:
     <div class="divider"></div>
     <div class="section-title">Portefeuille</div>
     <div class="portfolio-box">
-      <p>Charge un fichier portefeuille simple avec une seule colonne obligatoire : <strong>siret</strong>. La carte fait un rapprochement exact avec les sites ICPE géolocalisés et déduit le reste quand il y a match.</p>
+      <p>Colle simplement une liste de <strong>SIRET d'établissement</strong>, un par ligne. La carte reconnaît d'abord les sites ICPE connus, puis bascule sur SIRENE géolocalisée si besoin.</p>
+      <textarea id="portfolio-siret-input" class="portfolio-textarea" placeholder="siret&#10;66201120006080&#10;96580485000170&#10;02605008800033"></textarea>
       <div class="portfolio-actions">
-        <a class="button-link" href="./portfolio_template.xlsx" download>Télécharger le modèle XLSX</a>
-        <label class="file-label" for="portfolio-upload">Charger un portefeuille</label>
-        <input id="portfolio-upload" class="file-input" type="file" accept=".xlsx,.xls,.csv">
+        <button id="portfolio-run" class="button-link primary" type="button">Afficher ces SIRET</button>
+        <button id="portfolio-clear" class="button-link" type="button">Effacer</button>
       </div>
-      <div id="portfolio-status" class="portfolio-status">Aucun portefeuille chargé.</div>
+      <div id="portfolio-status" class="portfolio-status">Aucun SIRET chargé.</div>
     </div>
     <div class="divider"></div>
     <div class="section-title">Survoler une maille ou un site</div>
@@ -415,7 +422,6 @@ def construire_html(grille_geojson, points_icpe) -> str:
     </div>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script>
     const grilleGeojson = {json.dumps(grille_geojson)};
     const pointsICPEParCategorie = {json.dumps(points_icpe_par_categorie)};
@@ -751,66 +757,55 @@ def construire_html(grille_geojson, points_icpe) -> str:
       }}
     }}
 
-    function normalizePortfolioRow(raw) {{
-      const normalized = {{}};
-      Object.entries(raw || {{}}).forEach(([key, value]) => {{
-        normalized[String(key).trim().toLowerCase()] = value;
-      }});
-      const siret = String(
-        normalized.siret ?? normalized.num_siret ?? normalized.identifiant ?? normalized.id_siret ?? ''
-      ).replace(/\\D+/g, '');
-      if (!siret) return null;
-      return {{
-        siret,
-        company_name: normalized.company_name ?? normalized.nom_societe ?? normalized.nom_entreprise ?? '',
-        nom_societe: normalized.nom_societe ?? normalized.company_name ?? '',
-        portfolio_name: normalized.portfolio_name ?? normalized.portefeuille ?? normalized.site_label ?? '',
-      }};
+    function parsePortfolioText(rawText) {{
+      const lines = String(rawText || '')
+        .split(/\\r?\\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      return lines
+        .filter((line) => line.toLowerCase() !== 'siret')
+        .map((line) => String(line).replace(/\\D+/g, ''))
+        .filter((siret) => siret.length === 14)
+        .map((siret) => ({{
+          siret,
+          company_name: '',
+          nom_societe: '',
+          portfolio_name: '',
+        }}));
     }}
 
-    function parsePortfolioWorkbook(file) {{
-      return new Promise((resolve, reject) => {{
-        const reader = new FileReader();
-        reader.onload = function(event) {{
-          try {{
-            const data = new Uint8Array(event.target.result);
-            const workbook = XLSX.read(data, {{ type: 'array' }});
-            const firstSheet = workbook.SheetNames[0];
-            const sheet = workbook.Sheets[firstSheet];
-            const jsonRows = XLSX.utils.sheet_to_json(sheet, {{ defval: '' }});
-            resolve(jsonRows.map(normalizePortfolioRow).filter(Boolean));
-          }} catch (error) {{
-            reject(error);
-          }}
-        }};
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(file);
-      }});
-    }}
-
-    document.getElementById('portfolio-upload').addEventListener('change', async function(event) {{
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
+    async function runPortfolioLookup() {{
       const status = document.getElementById('portfolio-status');
+      const rawText = document.getElementById('portfolio-siret-input').value;
+      const rows = parsePortfolioText(rawText);
+      if (!rows.length) {{
+        clearPortfolioLayer();
+        status.textContent = 'Colle au moins un SIRET à 14 chiffres, un par ligne.';
+        return;
+      }}
       status.textContent = 'Chargement du portefeuille...';
       try {{
-        let rows = [];
-        if (file.name.toLowerCase().endsWith('.csv')) {{
-          const text = await file.text();
-          const workbook = XLSX.read(text, {{ type: 'string' }});
-          const firstSheet = workbook.SheetNames[0];
-          rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], {{ defval: '' }})
-            .map(normalizePortfolioRow)
-            .filter(Boolean);
-        }} else {{
-          rows = await parsePortfolioWorkbook(file);
-        }}
         const lookupResults = await lookupPortfolioRows(rows);
         renderPortfolioRows(rows, lookupResults);
       }} catch (error) {{
-        status.textContent = 'Le portefeuille n’a pas pu être chargé. Vérifie le format, la colonne SIRET et la disponibilité du service de lookup.';
+        status.textContent = 'Le portefeuille n’a pas pu être chargé. Vérifie la liste de SIRET et la disponibilité du service de lookup.';
         console.error(error);
       }}
+    }}
+
+    document.getElementById('portfolio-run').addEventListener('click', runPortfolioLookup);
+    document.getElementById('portfolio-siret-input').addEventListener('keydown', function(event) {{
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {{
+        event.preventDefault();
+        runPortfolioLookup();
+      }}
+    }});
+    document.getElementById('portfolio-clear').addEventListener('click', function() {{
+      document.getElementById('portfolio-siret-input').value = '';
+      clearPortfolioLayer();
+      document.getElementById('portfolio-status').textContent = 'Aucun SIRET chargé.';
+      resetHoverBox();
     }});
 
     map.fitBounds(coucheGrille.getBounds(), {{ padding: [24, 24] }});

@@ -254,6 +254,7 @@ def charger_grille():
 def charger_icpe():
     points = pd.read_csv(ICPE_ENRICHED_FILE, dtype={"code_aiot": "string"}, low_memory=False)
     points = points[points["categorie_eau_7"].notna()].copy()
+    points["num_siret"] = points["num_siret"].astype("string").str.replace(r"\D+", "", regex=True)
     points["x"] = pd.to_numeric(points["x"], errors="coerce")
     points["y"] = pd.to_numeric(points["y"], errors="coerce")
     points = points.dropna(subset=["x", "y"]).copy()
@@ -271,6 +272,13 @@ def charger_icpe():
             "lon": row["lon"],
             "categorie": row["categorie_eau_7"],
             "couleur": COULEURS_SECTEURS.get(row["categorie_eau_7"], COULEURS_POINTS["GRIS"]),
+            "siret": None if pd.isna(row.get("num_siret")) else str(row.get("num_siret")),
+            "nom_ets": row.get("nom_ets"),
+            "commune": row.get("commune"),
+            "site_sector": row.get("site_sector"),
+            "code_naf": row.get("code_naf"),
+            "lib_naf": row.get("lib_naf"),
+            "grid_class": LIBELLES_FOND.get(row.get("exposure_class_2x2"), "n.d."),
             "popup_html": row["popup_html"],
             "hover_html": row["hover_html"],
         }
@@ -347,6 +355,17 @@ def construire_html(grille_geojson, points_icpe) -> str:
     .section-title {{ font-size: 14px; font-weight: 700; margin-top: 8px; margin-bottom: 10px; }}
     .divider {{ height: 1px; background: #0f172a; opacity: 0.18; margin: 18px 0; }}
     .hover-box {{ font-size: 13px; line-height: 1.45; color: #334155; min-height: 120px; }}
+    .portfolio-box {{ display: grid; gap: 8px; }}
+    .portfolio-actions {{ display: flex; gap: 8px; flex-wrap: wrap; }}
+    .button-link, .file-label {{
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 34px; padding: 0 12px; border-radius: 6px; text-decoration: none;
+      border: 1px solid #cbd5e1; background: #f8fafc; color: #0f172a; font-size: 12px; font-weight: 600;
+      cursor: pointer;
+    }}
+    .button-link:hover, .file-label:hover {{ background: #eef2f7; }}
+    .file-input {{ display: none; }}
+    .portfolio-status {{ font-size: 12px; line-height: 1.45; color: #475569; }}
     .sources {{ margin-top: 24px; font-size: 12px; line-height: 1.55; color: #334155; }}
     .sources strong {{ display: block; margin-top: 8px; }}
     .leaflet-popup-content {{ margin: 10px 12px; line-height: 1.35; }}
@@ -374,6 +393,17 @@ def construire_html(grille_geojson, points_icpe) -> str:
       <div class="legend-row"><span class="swatch" style="background:{COULEURS_SECTEURS['Construction et génie civil']}"></span>Construction et génie civil</div>
     </div>
     <div class="divider"></div>
+    <div class="section-title">Portefeuille</div>
+    <div class="portfolio-box">
+      <p>Charge un fichier portefeuille simple par SIRET. La carte fait un rapprochement exact avec les sites ICPE géolocalisés et affiche les actifs retrouvés.</p>
+      <div class="portfolio-actions">
+        <a class="button-link" href="./portfolio_template.xlsx" download>Télécharger le modèle XLSX</a>
+        <label class="file-label" for="portfolio-upload">Charger un portefeuille</label>
+        <input id="portfolio-upload" class="file-input" type="file" accept=".xlsx,.xls,.csv">
+      </div>
+      <div id="portfolio-status" class="portfolio-status">Aucun portefeuille chargé.</div>
+    </div>
+    <div class="divider"></div>
     <div class="section-title">Survoler une maille ou un site</div>
     <div id="hover-box" class="hover-box">Les informations détaillées apparaîtront ici.</div>
     <div class="sources">
@@ -385,6 +415,7 @@ def construire_html(grille_geojson, points_icpe) -> str:
     </div>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script>
     const grilleGeojson = {json.dumps(grille_geojson)};
     const pointsICPEParCategorie = {json.dumps(points_icpe_par_categorie)};
@@ -410,6 +441,9 @@ def construire_html(grille_geojson, points_icpe) -> str:
 
     const panePoints = map.createPane('pane-points');
     panePoints.style.zIndex = 520;
+
+    const panePortfolio = map.createPane('pane-portfolio');
+    panePortfolio.style.zIndex = 620;
 
     function setHoverBox(html) {{
       document.getElementById('hover-box').innerHTML = html;
@@ -443,6 +477,7 @@ def construire_html(grille_geojson, points_icpe) -> str:
     }}).addTo(map);
 
     const renderer = L.canvas({{ padding: 0.5 }});
+    const portfolioRenderer = L.canvas({{ padding: 0.5 }});
 
     function pointRadiusForZoom(zoom) {{
       if (zoom >= 11) return 6.2;
@@ -527,6 +562,176 @@ def construire_html(grille_geojson, points_icpe) -> str:
     }}
 
     map.on('zoomend', updatePointRadii);
+
+    const portfolioLayer = L.layerGroup().addTo(map);
+    const allICPEPoints = Object.values(pointsICPEParCategorie).flat();
+    const icpeBySiret = new Map();
+    allICPEPoints.forEach((row) => {{
+      const siret = (row.siret || '').replace(/\\D+/g, '');
+      if (!siret) return;
+      if (!icpeBySiret.has(siret)) icpeBySiret.set(siret, []);
+      icpeBySiret.get(siret).push(row);
+    }});
+
+    function portfolioRadiusForZoom(zoom) {{
+      if (zoom >= 11) return 8.2;
+      if (zoom >= 10) return 7.0;
+      if (zoom >= 9) return 6.0;
+      if (zoom >= 8) return 5.0;
+      if (zoom >= 7) return 4.0;
+      if (zoom >= 6) return 3.0;
+      return 2.2;
+    }}
+
+    function updatePortfolioRadii() {{
+      const radius = portfolioRadiusForZoom(map.getZoom());
+      portfolioLayer.eachLayer((layer) => {{
+        if (layer.setRadius) layer.setRadius(radius);
+      }});
+    }}
+
+    map.on('zoomend', updatePortfolioRadii);
+
+    function escapeHtml(value) {{
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }}
+
+    function buildPortfolioHover(row, portfolioRow) {{
+      const portfolioName = portfolioRow.company_name || portfolioRow.nom_societe || portfolioRow.portfolio_name || 'Ligne portefeuille';
+      const siteName = row.nom_ets || 'Site sans nom';
+      return `
+        <strong>${{escapeHtml(siteName)}}</strong><br>
+        Portefeuille : ${{escapeHtml(portfolioName)}}<br>
+        SIRET : ${{escapeHtml(portfolioRow.siret)}}<br>
+        Catégorie eau : ${{escapeHtml(row.categorie || 'n.d.')}}<br>
+        Commune : ${{escapeHtml(row.commune || 'n.d.')}}<br>
+        Classe de grille : ${{escapeHtml(row.grid_class || 'n.d.')}}
+      `;
+    }}
+
+    function clearPortfolioLayer() {{
+      portfolioLayer.clearLayers();
+      updatePortfolioRadii();
+    }}
+
+    function renderPortfolioRows(rows) {{
+      clearPortfolioLayer();
+      const matchedSites = [];
+      const unmatched = [];
+
+      rows.forEach((row) => {{
+        const siret = String(row.siret || '').replace(/\\D+/g, '');
+        if (!siret) return;
+        const matches = icpeBySiret.get(siret) || [];
+        if (!matches.length) {{
+          unmatched.push(siret);
+          return;
+        }}
+        matches.forEach((match) => {{
+          matchedSites.push(match);
+          const marker = L.circleMarker([match.lat, match.lon], {{
+            pane: 'pane-portfolio',
+            renderer: portfolioRenderer,
+            radius: portfolioRadiusForZoom(map.getZoom()),
+            stroke: true,
+            weight: 1.6,
+            color: '#0f172a',
+            fillColor: '#facc15',
+            fillOpacity: 0.92
+          }});
+          const hoverHtml = buildPortfolioHover(match, row);
+          marker.on('mouseover', function() {{
+            setHoverBox(hoverHtml);
+          }});
+          marker.on('mouseout', function() {{
+            resetHoverBox();
+          }});
+          portfolioLayer.addLayer(marker);
+        }});
+      }});
+
+      const status = document.getElementById('portfolio-status');
+      if (!rows.length) {{
+        status.innerHTML = 'Aucune ligne exploitable trouvée dans le fichier.';
+        return;
+      }}
+
+      status.innerHTML = `
+        <strong>${{rows.length}}</strong> lignes lues<br>
+        <strong>${{matchedSites.length}}</strong> points ICPE affichés<br>
+        <strong>${{unmatched.length}}</strong> SIRET sans correspondance
+      `;
+
+      if (portfolioLayer.getLayers().length) {{
+        map.fitBounds(portfolioLayer.getBounds(), {{ padding: [32, 32], maxZoom: 9 }});
+      }}
+    }}
+
+    function normalizePortfolioRow(raw) {{
+      const normalized = {{}};
+      Object.entries(raw || {{}}).forEach(([key, value]) => {{
+        normalized[String(key).trim().toLowerCase()] = value;
+      }});
+      const siret = String(
+        normalized.siret ?? normalized.num_siret ?? normalized.identifiant ?? normalized.id_siret ?? ''
+      ).replace(/\\D+/g, '');
+      if (!siret) return null;
+      return {{
+        siret,
+        company_name: normalized.company_name ?? normalized.nom_societe ?? normalized.nom_entreprise ?? '',
+        nom_societe: normalized.nom_societe ?? normalized.company_name ?? '',
+        portfolio_name: normalized.portfolio_name ?? normalized.portefeuille ?? normalized.site_label ?? '',
+      }};
+    }}
+
+    function parsePortfolioWorkbook(file) {{
+      return new Promise((resolve, reject) => {{
+        const reader = new FileReader();
+        reader.onload = function(event) {{
+          try {{
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, {{ type: 'array' }});
+            const firstSheet = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[firstSheet];
+            const jsonRows = XLSX.utils.sheet_to_json(sheet, {{ defval: '' }});
+            resolve(jsonRows.map(normalizePortfolioRow).filter(Boolean));
+          }} catch (error) {{
+            reject(error);
+          }}
+        }};
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      }});
+    }}
+
+    document.getElementById('portfolio-upload').addEventListener('change', async function(event) {{
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const status = document.getElementById('portfolio-status');
+      status.textContent = 'Chargement du portefeuille...';
+      try {{
+        let rows = [];
+        if (file.name.toLowerCase().endsWith('.csv')) {{
+          const text = await file.text();
+          const workbook = XLSX.read(text, {{ type: 'string' }});
+          const firstSheet = workbook.SheetNames[0];
+          rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], {{ defval: '' }})
+            .map(normalizePortfolioRow)
+            .filter(Boolean);
+        }} else {{
+          rows = await parsePortfolioWorkbook(file);
+        }}
+        renderPortfolioRows(rows);
+      }} catch (error) {{
+        status.textContent = 'Le fichier n’a pas pu être lu. Vérifie le format et la colonne SIRET.';
+        console.error(error);
+      }}
+    }});
 
     map.fitBounds(coucheGrille.getBounds(), {{ padding: [24, 24] }});
   </script>

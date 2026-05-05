@@ -400,6 +400,12 @@ def construire_html(grille_geojson, points_icpe) -> str:
       maxZoom: 20
     }}).addTo(map);
 
+    const paneGrille = map.createPane('pane-grille');
+    paneGrille.style.zIndex = 350;
+
+    const panePoints = map.createPane('pane-points');
+    panePoints.style.zIndex = 520;
+
     function setHoverBox(html) {{
       document.getElementById('hover-box').innerHTML = html;
     }}
@@ -419,6 +425,7 @@ def construire_html(grille_geojson, points_icpe) -> str:
     }}
 
     const coucheGrille = L.geoJSON(grilleGeojson, {{
+      pane: 'pane-grille',
       style: styleGrille,
       onEachFeature: function(feature, layer) {{
         layer.on('mouseover', function() {{
@@ -432,15 +439,29 @@ def construire_html(grille_geojson, points_icpe) -> str:
 
     const renderer = L.canvas({{ padding: 0.5 }});
 
+    function pointRadiusForZoom(zoom) {{
+      if (zoom >= 11) return 6.8;
+      if (zoom >= 10) return 5.8;
+      if (zoom >= 9) return 5.0;
+      if (zoom >= 8) return 4.4;
+      if (zoom >= 7) return 3.6;
+      return 2.8;
+    }}
+
+    function currentPointRadius() {{
+      return pointRadiusForZoom(map.getZoom());
+    }}
+
     function ajoutePointsICPE(records, couleur) {{
       const layer = L.layerGroup();
       records.forEach((row) => {{
         const marker = L.circleMarker([row.lat, row.lon], {{
+          pane: 'pane-points',
           renderer: renderer,
-          radius: 2.4,
+          radius: currentPointRadius(),
           stroke: false,
           fillColor: couleur,
-          fillOpacity: 0.62
+          fillOpacity: 0.7
         }});
         marker.on('mouseover', function() {{
           setHoverBox(row.hover_html || row.popup_html || hoverDefaultHtml);
@@ -489,6 +510,17 @@ def construire_html(grille_geojson, points_icpe) -> str:
         }}
       }});
     }});
+
+    function updatePointRadii() {{
+      const radius = currentPointRadius();
+      Object.values(couchesICPE).forEach((couche) => {{
+        couche.eachLayer((layer) => {{
+          if (layer.setRadius) layer.setRadius(radius);
+        }});
+      }});
+    }}
+
+    map.on('zoomend', updatePointRadii);
 
     map.fitBounds(coucheGrille.getBounds(), {{ padding: [24, 24] }});
   </script>

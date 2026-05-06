@@ -673,6 +673,7 @@ def construire_html(grille_geojson, points_icpe) -> str:
       let displayed = 0;
       let icpeCount = 0;
       let unmatchedCount = 0;
+      let recognizedNoGeolocCount = 0;
 
       rows.forEach((row) => {{
         const siret = String(row.siret || '').replace(/\\D+/g, '');
@@ -718,6 +719,10 @@ def construire_html(grille_geojson, points_icpe) -> str:
         }}
 
         if (!result || !result.found || !Number.isFinite(result.latitude) || !Number.isFinite(result.longitude)) {{
+          if (result?.exists_in_source && !result?.has_geolocation) {{
+            recognizedNoGeolocCount += 1;
+            return;
+          }}
           unmatchedCount += 1;
           return;
         }}
@@ -749,6 +754,7 @@ def construire_html(grille_geojson, points_icpe) -> str:
         <strong>${{rows.length}}</strong> lignes lues<br>
         <strong>${{displayed}}</strong> points affichés<br>
         <strong>${{icpeCount}}</strong> sites ICPE reconnus<br>
+        <strong>${{recognizedNoGeolocCount}}</strong> SIRET reconnus mais non géolocalisés<br>
         <strong>${{unmatchedCount}}</strong> SIRET sans correspondance
       `;
 

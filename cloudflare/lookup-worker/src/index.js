@@ -29,6 +29,12 @@ async function loadShard(env, objectKey) {
   return await object.json();
 }
 
+async function loadExistenceShard(env, objectKey) {
+  const object = await env.SIRENE_SHARDS.get(objectKey);
+  if (!object) return [];
+  return await object.json();
+}
+
 function pickResult(record) {
   const gridLabels = {
     HPD: "high_pressure_declining_groundwater",
@@ -103,10 +109,29 @@ export default {
       const shard = shardMap.get(shardKey) || {};
       const record = shard[siret];
       if (!record) {
-        return { siret, found: false };
+        return { siret, found: false, exists_in_source: false, has_geolocation: false };
       }
-      return { siret, found: true, ...pickResult(record) };
+      return { siret, found: true, exists_in_source: true, has_geolocation: true, ...pickResult(record) };
     });
+
+    const missing = results.filter((row) => !row.found).map((row) => row.siret);
+    if (missing.length) {
+      const existsNamespace = env.EXISTS_NAMESPACE || "sirene-exists/v1";
+      const existenceShardKeys = [...new Set(missing.map((siret) => shardKeyForSiret(siret, prefixLength, existsNamespace)))];
+      const existenceEntries = await Promise.all(
+        existenceShardKeys.map(async (key) => [key, new Set(await loadExistenceShard(env, key))])
+      );
+      const existenceMap = new Map(existenceEntries);
+
+      results.forEach((row) => {
+        if (row.found) return;
+        const shardKey = shardKeyForSiret(row.siret, prefixLength, existsNamespace);
+        const existenceShard = existenceMap.get(shardKey);
+        if (existenceShard?.has(row.siret)) {
+          row.exists_in_source = true;
+        }
+      });
+    }
 
     const matched = results.filter((row) => row.found).length;
     return json({

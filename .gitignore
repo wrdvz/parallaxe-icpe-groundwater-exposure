@@ -7,6 +7,8 @@ cloudflare/lookup-worker/node_modules/
 outputs/sirene_shards/
 outputs/sirene_shards_active/
 outputs/sirene_shards_active_g08/
+outputs/sirene_exists_shards/
+outputs/sirene_exists_full_shards/
 *.egg-info/
 .env
 .ipynb_checkpoints/

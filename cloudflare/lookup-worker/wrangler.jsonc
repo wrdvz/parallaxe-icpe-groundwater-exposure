@@ -14,7 +14,7 @@
   ],
   "vars": {
     "SHARD_PREFIX_LENGTH": "3",
-    "SHARD_NAMESPACE": "sirene/v1",
+    "SHARD_NAMESPACE": "sirene/v2",
     "EXISTS_NAMESPACE": "sirene-exists-full/v1"
   }
 }

@@ -626,6 +626,34 @@ def construire_html(grille_geojson, points_icpe) -> str:
       return num.toFixed(2);
     }}
 
+    function portfolioMarkerStyle(result, localIcpeMatch) {{
+      if (localIcpeMatch || result.site_icpe) {{
+        return {{
+          color: '#0f172a',
+          fillColor: '#facc15',
+          fillOpacity: 0.92,
+          weight: 1.6
+        }};
+      }}
+
+      const score = Number(result.geo_score);
+      if (Number.isFinite(score) && score < 0.7) {{
+        return {{
+          color: '#475569',
+          fillColor: '#fde68a',
+          fillOpacity: 0.45,
+          weight: 1.2
+        }};
+      }}
+
+      return {{
+        color: '#0f172a',
+        fillColor: '#fde68a',
+        fillOpacity: 0.92,
+        weight: 1.6
+      }};
+    }}
+
     function buildPortfolioHover(row, portfolioRow, localIcpeMatch) {{
       const portfolioName = portfolioRow.company_name || portfolioRow.nom_societe || portfolioRow.portfolio_name || '';
       const siteName = localIcpeMatch?.nom_ets || row.denomination || 'Site sans nom';
@@ -690,10 +718,7 @@ def construire_html(grille_geojson, points_icpe) -> str:
               renderer: portfolioRenderer,
               radius: portfolioRadiusForZoom(map.getZoom()),
               stroke: true,
-              weight: 1.6,
-              color: '#0f172a',
-              fillColor: '#facc15',
-              fillOpacity: 0.92
+              ...portfolioMarkerStyle({{ site_icpe: true, geo_score: result?.geo_score ?? null }}, match)
             }});
             const hoverHtml = buildPortfolioHover(
               {{
@@ -735,10 +760,7 @@ def construire_html(grille_geojson, points_icpe) -> str:
           renderer: portfolioRenderer,
           radius: portfolioRadiusForZoom(map.getZoom()),
           stroke: true,
-          weight: 1.6,
-          color: '#0f172a',
-          fillColor: result.site_icpe ? '#facc15' : '#fde68a',
-          fillOpacity: 0.92
+          ...portfolioMarkerStyle(result, null)
         }});
         const hoverHtml = buildPortfolioHover(result, row, null);
         marker.on('mouseover', function() {{

@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "icpe-groundwater-exposure"
+name = "parallaxe-icpe-groundwater-exposure"
 version = "0.1.0"
 description = "ICPE exposure to long-term groundwater trends in France"
 requires-python = ">=3.9"

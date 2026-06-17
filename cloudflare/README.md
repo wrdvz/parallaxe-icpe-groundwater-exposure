@@ -79,7 +79,7 @@ npx wrangler r2 object put icpe-groundwater-sirene-shards/sirene/v1/000.json --f
 Upload batch avec le helper du repo :
 
 ```bash
-cd /Users/wrdvz/dev/parallaxe/_portfolio/icpe-groundwater-exposure
+cd /Users/wrdvz/dev/parallaxe/_portfolio/parallaxe-icpe-groundwater-exposure
 /usr/bin/python3 cloudflare/scripts/upload_r2_shards.py \
   --bucket icpe-groundwater-sirene-shards \
   --source-dir outputs/sirene_shards_active_g08/sirene/v1 \
@@ -89,7 +89,7 @@ cd /Users/wrdvz/dev/parallaxe/_portfolio/icpe-groundwater-exposure
 Test limité sur 20 fichiers :
 
 ```bash
-cd /Users/wrdvz/dev/parallaxe/_portfolio/icpe-groundwater-exposure
+cd /Users/wrdvz/dev/parallaxe/_portfolio/parallaxe-icpe-groundwater-exposure
 /usr/bin/python3 cloudflare/scripts/upload_r2_shards.py \
   --bucket icpe-groundwater-sirene-shards \
   --source-dir outputs/sirene_shards_active_g08/sirene/v1 \

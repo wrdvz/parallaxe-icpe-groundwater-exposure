@@ -1,64 +1,81 @@
-# ICPE groundwater exposure in France
+# Parallaxe ICPE groundwater exposure
 
-This project extends the 20-year groundwater trend signal produced in
-[`groundwater-france-trends`](../groundwater-france-trends) and crosses it with
-French ICPE industrial sites.
+This repository turns long-term groundwater trend signals into an operational
+exposure layer for French industrial and regulated sites.
 
-The goal is to make the hydrological signal more actionable: identify industrial
-facilities located in areas where nearby groundwater monitoring stations show a
-long-term declining, stable, or rising trend.
+It sits between:
+
+- `parallaxe-groundwater-france-trends`: hydrological signal production
+- `parallaxe-groundwater-risk-engine`: future search-first product layer
+
+## What this repository produces
+
+This compute repository now has two output families:
+
+### 1. Editorial / analytical outputs
+
+- interactive HTML screening map in `docs/`
+- editorial PNG maps by sector
+- intermediate processed CSV / GeoJSON files
+
+### 2. Product-facing data exports
+
+For the future app, this repository also exports parquet tables under
+`outputs/product/`:
+
+- `companies.parquet`
+- `sites.parquet`
+- `site_hydro_context.parquet`
+- `site_risk_scores.parquet`
+
+These files form the MVP data contract for the future
+`parallaxe-groundwater-risk-engine` repository.
 
 ## Analytical idea
 
-For each ICPE site, the project will compute a local groundwater trend signal
-from monitoring stations located within 20 km of the site.
+The current methodology combines:
 
-Planned indicators:
+- a 20 km screening grid
+- groundwater trend over 20 years
+- territorial pressure based on `AEP + IND + IRR`
+- ICPE site enrichment
+- a 7-category water-relevance taxonomy
 
-- local median groundwater variation over 2005-2025, in cm
-- local mean groundwater variation over 2005-2025, in cm
-- number of stations within 20 km
-- support flag: solid signal when at least 5 stations are available
-- visual marker for declining, stable, or rising groundwater context
+The signal should be read as a contextual operational exposure indicator, not as
+an exhaustive financial risk model.
 
-This indicator should be read as a contextual hydrological exposure signal, not
-as a complete operational risk score for each facility.
+## Current role in the product stack
 
-## Relationship to the groundwater trend project
+`parallaxe-icpe-groundwater-exposure` is the **compute and methodology repo**.
+It is responsible for:
 
-The first project establishes the national hydrological signal:
+- ingesting and cleaning source datasets
+- building the ICPE and groundwater context tables
+- generating cartographic outputs
+- exporting product tables for downstream app use
 
-- station-level groundwater trends
-- BDLISA outcropping aquifer aggregation
-- national map of 20-year groundwater evolution
+The future `parallaxe-groundwater-risk-engine` app will be responsible for:
 
-This second project uses that signal as an input layer and adds ICPE sites as an
-operational lens.
+- search-first company and site resolution
+- portfolio screening UX
+- ranking and explanation delivery
+- product runtime APIs
 
-## Planned pipeline
+## Main sources
 
-1. Prepare groundwater trend inputs from `groundwater-france-trends`.
-2. Fetch or load ICPE sites and classify them by sector.
-3. Compute a 20 km local groundwater context around each ICPE site.
-4. Generate an interactive map with ICPE markers and groundwater background.
-5. Summarize exposure patterns by sector, region, and signal robustness.
-
-## Current repository state
-
-This repository has been initialized from the first groundwater trend project,
-with the heavy raw database and BDLISA source files excluded. It contains the
-processed groundwater trend outputs needed as a starting point for the ICPE
-analysis.
-
-## Data sources
-
-Groundwater trend inputs are derived from:
-
-- ADES / Hubeau groundwater level observations
+- ADES / Hubeau groundwater observations
 - BDLISA hydrogeological entities
-- `groundwater-france-trends` processing outputs
+- BNPE groundwater withdrawals
+- ICPE / Georisques facility data
+- SIRENE / SIRET enrichment where relevant for product serving
 
-ICPE source data still needs to be selected and documented.
+## Product export regeneration
+
+Generate the current MVP parquet exports with:
+
+```bash
+python3 scripts/11_export_product_tables.py
+```
 
 ## Author
 

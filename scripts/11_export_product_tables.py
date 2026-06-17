@@ -50,6 +50,37 @@ def _decile_from_percentile(percentiles: pd.Series) -> pd.Series:
     return out
 
 
+def _physical_score_10(values: pd.Series, *, lower_is_worse: bool = False) -> pd.Series:
+    numeric = pd.to_numeric(values, errors="coerce")
+    out = pd.Series(pd.NA, index=values.index, dtype="Float64")
+    valid = numeric.dropna().astype(float)
+    if valid.empty:
+        return out
+
+    if lower_is_worse:
+        severity = (-valid).clip(lower=0)
+    else:
+        severity = valid.clip(lower=0)
+    min_value = float(severity.min())
+    max_value = float(severity.max())
+    if np.isclose(max_value, min_value):
+        out.loc[valid.index] = 10.0
+        return out
+
+    normalized = 1 + 9 * (severity - min_value) / (max_value - min_value)
+    out.loc[valid.index] = normalized.clip(1, 10)
+    return out
+
+
+def _level_10_from_score(scores: pd.Series) -> pd.Series:
+    numeric = pd.to_numeric(scores, errors="coerce")
+    out = pd.Series(pd.NA, index=scores.index, dtype="Int64")
+    valid = numeric.dropna().clip(lower=1, upper=10)
+    levels = np.rint(valid).clip(1, 10).astype(int)
+    out.loc[valid.index] = levels
+    return out
+
+
 def _clean_siret(value) -> str | None:
     if pd.isna(value):
         return None
@@ -278,6 +309,8 @@ def main() -> None:
             "Faible pression + nappe non baissière": "Low",
         }
     ).fillna("Unknown")
+    # Keep relative rank fields for later analysis, but build the V2 product score from
+    # physical positions on each value scale rather than from population quantiles.
     site_hydro_context["groundwater_decline_percentile"] = _critical_percentile(
         site_hydro_context["aquifer_trend_value_cm_20y"], lower_is_worse=True
     )
@@ -291,11 +324,17 @@ def main() -> None:
         site_hydro_context["withdrawal_volume_percentile"]
     )
 
-    groundwater_score_10 = site_hydro_context["groundwater_decline_percentile"] / 10
-    withdrawal_score_10 = site_hydro_context["withdrawal_volume_percentile"] / 10
+    groundwater_score_10 = _physical_score_10(
+        site_hydro_context["aquifer_trend_value_cm_20y"], lower_is_worse=True
+    )
+    withdrawal_score_10 = _physical_score_10(
+        site_hydro_context["withdrawal_pressure_volume_m3"], lower_is_worse=False
+    )
     criticality_score_10 = (
         (groundwater_score_10 + withdrawal_score_10) / 2
     ).where(groundwater_score_10.notna() & withdrawal_score_10.notna())
+    groundwater_level_10 = _level_10_from_score(groundwater_score_10)
+    withdrawal_level_10 = _level_10_from_score(withdrawal_score_10)
 
     risk = df[
         [
@@ -339,13 +378,15 @@ def main() -> None:
         ),
         axis=1,
     )
-    risk["score_version"] = "mvp_v1"
+    risk["score_version"] = "mvp_v2_physical_levels"
     risk["dependency_score_1_10"] = pd.to_numeric(risk["score_probabilite_nappe_1_10"], errors="coerce")
     risk["is_water_relevant"] = risk["is_water_relevant"].apply(_to_bool)
     risk["within_water_scope"] = risk["dans_perimetre_eau"].apply(_to_bool)
     risk["groundwater_score_10"] = groundwater_score_10.round(1)
     risk["withdrawal_score_10"] = withdrawal_score_10.round(1)
     risk["criticality_score_10"] = criticality_score_10.round(1)
+    site_hydro_context["groundwater_level_10"] = groundwater_level_10
+    site_hydro_context["withdrawal_level_10"] = withdrawal_level_10
     site_risk_scores = risk[
         [
             "site_id",
